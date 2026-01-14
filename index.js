@@ -26,7 +26,7 @@ fastify.register(fastifyWs);
 const PORT = process.env.PORT || 8080;
 
 // ==================================================
-// MYDATA SYSTEM PROMPT (DANSK)
+// SYSTEM PROMPT (DANSK)
 // ==================================================
 const SYSTEM_MESSAGE = `
 Du er MyData Support.
@@ -85,6 +85,9 @@ fastify.register(async (fastify) => {
     let lastAssistantItem = null;
     let markQueue = [];
 
+    let openAiReady = false;
+    let twilioReady = false;
+
     const openAiWs = new WebSocket(
       `wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview&temperature=${TEMPERATURE}`,
       {
@@ -100,6 +103,7 @@ fastify.register(async (fastify) => {
     // ==================================================
     openAiWs.on("open", () => {
       fastify.log.info("🤖 OpenAI Realtime connected");
+      openAiReady = true;
 
       // Session init (KRITISK)
       openAiWs.send(JSON.stringify({
@@ -120,14 +124,6 @@ fastify.register(async (fastify) => {
           instructions: SYSTEM_MESSAGE,
         }
       }));
-
-      // AI starter samtalen
-      openAiWs.send(JSON.stringify({
-        type: "response.create",
-        response: {
-          instructions: "Hej, du taler med MyData Support. Hvordan kan jeg hjælpe?",
-        }
-      }));
     });
 
     // ==================================================
@@ -136,7 +132,7 @@ fastify.register(async (fastify) => {
     openAiWs.on("message", (data) => {
       const msg = JSON.parse(data.toString());
 
-      if (msg.type === "response.output_audio.delta" && msg.delta) {
+      if (msg.type === "response.output_audio.delta" && msg.delta && streamSid) {
         connection.send(JSON.stringify({
           event: "media",
           streamSid,
@@ -156,12 +152,15 @@ fastify.register(async (fastify) => {
           streamSid,
           mark: { name: "ai-response" }
         }));
+
         markQueue.push("ai-response");
       }
 
+      // Afbryd AI hvis kunden begynder at tale
       if (msg.type === "input_audio_buffer.speech_started") {
         if (lastAssistantItem && responseStartTimestampTwilio !== null) {
           const elapsed = latestMediaTimestamp - responseStartTimestampTwilio;
+
           openAiWs.send(JSON.stringify({
             type: "conversation.item.truncate",
             item_id: lastAssistantItem,
@@ -187,8 +186,19 @@ fastify.register(async (fastify) => {
       switch (data.event) {
         case "start":
           streamSid = data.start.streamSid;
+          twilioReady = true;
           latestMediaTimestamp = 0;
           responseStartTimestampTwilio = null;
+
+          // 🔥 NU må AI tale (VIGTIG FIX)
+          if (openAiReady) {
+            openAiWs.send(JSON.stringify({
+              type: "response.create",
+              response: {
+                instructions: "Hej, du taler med MyData Support. Hvordan kan jeg hjælpe?"
+              }
+            }));
+          }
           break;
 
         case "media":
@@ -226,7 +236,7 @@ fastify.register(async (fastify) => {
 });
 
 // ==================================================
-// START
+// START SERVER
 // ==================================================
 fastify.listen({ port: PORT, host: "0.0.0.0" }, (err) => {
   if (err) {
