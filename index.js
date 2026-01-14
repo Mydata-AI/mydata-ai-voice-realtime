@@ -201,15 +201,31 @@ fastify.register(async (fastify) => {
           }
           break;
 
-        case "media":
-          latestMediaTimestamp = data.media.timestamp;
-          if (openAiWs.readyState === WebSocket.OPEN) {
-            openAiWs.send(JSON.stringify({
-              type: "input_audio_buffer.append",
-              audio: data.media.payload
-            }));
-          }
-          break;
+ case "media":
+  latestMediaTimestamp = data.media.timestamp;
+
+  if (openAiWs.readyState === WebSocket.OPEN) {
+    // 1️⃣ Send audio chunk
+    openAiWs.send(JSON.stringify({
+      type: "input_audio_buffer.append",
+      audio: data.media.payload
+    }));
+
+    // 2️⃣ Fortæl OpenAI at den må svare
+    openAiWs.send(JSON.stringify({
+      type: "input_audio_buffer.commit"
+    }));
+
+    // 3️⃣ Bed om et svar (audio)
+    openAiWs.send(JSON.stringify({
+      type: "response.create",
+      response: {
+        modalities: ["audio"]
+      }
+    }));
+  }
+  break;
+
 
         case "mark":
           if (markQueue.length > 0) markQueue.shift();
