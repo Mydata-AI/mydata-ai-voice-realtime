@@ -1,0 +1,17 @@
+{
+  "name": "mydata-ai-voice-realtime",
+  "version": "1.0.0",
+  "description": "MyData AI Voice – Twilio Media Streams + OpenAI Realtime",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "fastify": "^5.0.0",
+    "@fastify/formbody": "^8.0.0",
+    "@fastify/websocket": "^11.0.0",
+    "ws": "^8.18.0",
+    "dotenv": "^16.4.5"
+  }
+}
